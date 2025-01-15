@@ -41,6 +41,9 @@ const MedicalTranscription = () => {
   const [numSpeakers, setNumSpeakers] = useState(1);
   const [language, setLanguage] = useState('he-IL');
 
+  // -- New state to hold + edit the generated summary text --
+  const [editedSummary, setEditedSummary] = useState('');
+
   const handleCleanText = async () => {
     if (!sessionId) {
       setError('No active session');
@@ -59,7 +62,7 @@ const MedicalTranscription = () => {
       
     } catch (error) {
       console.error('Error cleaning text:', error);
-      // Removed: setError('שגיאה בניקוי הטקסט');
+      // (Removed) setError('שגיאה בניקוי הטקסט');
     } finally {
       setIsProcessingAI(false);
     }
@@ -79,16 +82,51 @@ const MedicalTranscription = () => {
         setTranscription(progressText);
       };
       
-      await aiAgentSummary(sessionId, handleProgress);
+      const summaryResult = await aiAgentSummary(sessionId, handleProgress);
       
+      // -- Once summary is complete, put it into "editedSummary" --
+      setEditedSummary(summaryResult);
+
     } catch (error) {
       console.error('Error generating summary:', error);
-      // Removed: setError('שגיאה ביצירת סיכום');
+      // (Removed) setError('שגיאה ביצירת סיכום');
     } finally {
       setIsProcessingAI(false);
     }
   };
 
+  // -- New function to save the edited summary to S3, overwriting old one --
+  const handleLoadEditedSummary = async () => {
+    if (!sessionId || !editedSummary) return;
+
+    try {
+      setIsProcessingAI(true);
+
+      // We'll reuse the same S3 logic that aiAgentSummary uses
+      const summaryData = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        summary: editedSummary,
+        originalText: transcription // or you could store the raw text again
+      };
+
+      await S3Service.saveToS3(
+        'ai.hadassah.frankfurt',
+        `ai-summaries/${sessionId}.json`,
+        JSON.stringify(summaryData, null, 2),
+        'application/json'
+      );
+
+      // Optionally also show the updated text on screen
+      setTranscription(editedSummary);
+      console.log('Updated summary saved successfully');
+    } catch (err) {
+      console.error('Error saving updated summary:', err);
+      setError(`Error saving edited summary: ${err.message}`);
+    } finally {
+      setIsProcessingAI(false);
+    }
+  };
 
   const loadTranscription = async (sessionId) => {
     setIsLoadingTranscription(true);
@@ -102,7 +140,6 @@ const MedicalTranscription = () => {
       const pollForTranscription = async () => {
         try {
           const transcriptionText = await S3Service.getFirstTranscription(sessionId);
-
           if (transcriptionText) {
             setTranscription(transcriptionText);
             return true;
@@ -118,7 +155,6 @@ const MedicalTranscription = () => {
         if (attempts >= maxAttempts) {
           throw new Error('Timeout waiting for transcription');
         }
-
         console.log(`Polling attempt ${attempts + 1}/${maxAttempts} for session ${sessionId}`);
         const found = await pollForTranscription();
         if (!found) {
@@ -211,7 +247,7 @@ const MedicalTranscription = () => {
     } finally {
       setUploadingFile(false);
     }
-};
+  };
 
   const transcribeClient = new TranscribeStreamingClient({
     region: process.env.REACT_APP_AWS_REGION || 'eu-central-1',
@@ -443,7 +479,7 @@ const MedicalTranscription = () => {
       await startTranscription(stream);
     } catch (error) {
       console.error('Recording error:', error);
-      // setError('Failed to start recording: ' + error.message); // Show error in console
+      // Removed visible error assignment
     } finally {
       setIsProcessing(false);
     }
@@ -520,7 +556,6 @@ const MedicalTranscription = () => {
     }
   }, [sessionId, transcription]);
 
-
   return (
     <div className="min-h-screen bg-blue-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-4 md:p-6">
@@ -544,12 +579,12 @@ const MedicalTranscription = () => {
         )}
 
         <TranscriptionConfig
-                  numSpeakers={numSpeakers}
-                  setNumSpeakers={setNumSpeakers}
-                  language={language}
-                  setLanguage={setLanguage}
-                  disabled={isRecording || isProcessing || uploadingFile}
-                />
+          numSpeakers={numSpeakers}
+          setNumSpeakers={setNumSpeakers}
+          language={language}
+          setLanguage={setLanguage}
+          disabled={isRecording || isProcessing || uploadingFile}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-lg mb-6">
           <button
@@ -560,8 +595,12 @@ const MedicalTranscription = () => {
             {isProcessing ? (
               <span className="flex items-center justify-center">
                 <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle className="opacity-25" cx="12" cy="12" r="10" 
+                    stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 
+                      5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 
+                      5.824 3 7.938l3-2.647z" />
                 </svg>
                 מתחיל...
               </span>
@@ -600,8 +639,12 @@ const MedicalTranscription = () => {
               {uploadingFile ? (
                 <span className="flex items-center">
                   <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <circle className="opacity-25" cx="12" cy="12" r="10" 
+                      stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0
+                        12h4zm2 5.291A7.962 7.962 0 014 12H0c0 
+                        3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   מעלה...
                 </span>
@@ -631,12 +674,12 @@ const MedicalTranscription = () => {
           </div>
         )}
 
-      {(sessionId && !isRecording) && (
-                <AudioPlayer
-                  sessionId={sessionId}
-                  recordingType={selectedFileName ? 'upload' : 'recording'}
-                />
-              )}
+        {(sessionId && !isRecording) && (
+          <AudioPlayer
+            sessionId={sessionId}
+            recordingType={selectedFileName ? 'upload' : 'recording'}
+          />
+        )}
 
         {/* AI Processing Controls */}
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -648,8 +691,12 @@ const MedicalTranscription = () => {
             {isProcessingAI ? (
               <span className="flex items-center justify-center">
                 <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle className="opacity-25" cx="12" cy="12" r="10" 
+                    stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 
+                      12h4zm2 5.291A7.962 7.962 0 014 12H0c0 
+                      3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
                 מעבד...
               </span>
@@ -665,8 +712,13 @@ const MedicalTranscription = () => {
             {isProcessingAI ? (
               <span className="flex items-center justify-center">
                 <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle className="opacity-25" cx="12" cy="12" r="10" 
+                    stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 
+                      5.373 0 12h4zm2 5.291A7.962 7.962 
+                      0 014 12H0c0 3.042 1.135 5.824 3 
+                      7.938l3-2.647z" />
                 </svg>
                 מעבד...
               </span>
@@ -678,8 +730,32 @@ const MedicalTranscription = () => {
         </div>
 
         <div className="space-y-4">
-            <TextDisplay text={transcription} sessionId={sessionId} />
+          {/* Existing text display for the full transcript */}
+          <TextDisplay text={transcription} sessionId={sessionId} />
+
+          {/* -- New editable summary area (visible once summary is generated) -- */}
+          {editedSummary && (
+            <div className="bg-gray-50 p-4 rounded-lg shadow">
+              <label className="block mb-2 text-gray-700 font-bold text-right">
+                עריכת טקסט מסוכם:
+              </label>
+              <textarea
+                className="w-full p-2 border rounded-md text-right"
+                style={{ direction: 'rtl' }}
+                rows={6}
+                value={editedSummary}
+                onChange={(e) => setEditedSummary(e.target.value)}
+              />
+              <button
+                onClick={handleLoadEditedSummary}
+                disabled={isProcessingAI}
+                className={`btn-primary mt-2 ${isProcessingAI ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                טען טקסט מתוקן
+              </button>
             </div>
+          )}
+        </div>
       </div>
     </div>
   );
