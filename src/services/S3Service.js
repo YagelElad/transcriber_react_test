@@ -39,7 +39,11 @@ class S3Service {
       
       // Parse the JSON and extract the content
       const transcriptionData = JSON.parse(result);
-      if (!transcriptionData || !transcriptionData.results || !transcriptionData.results.transcripts) {
+      if (
+        !transcriptionData ||
+        !transcriptionData.results ||
+        !transcriptionData.results.transcripts
+      ) {
         throw new Error('Invalid transcription format');
       }
       
@@ -181,6 +185,42 @@ class S3Service {
         stack: error.stack,
         name: error.name
       });
+      throw error;
+    }
+  }
+
+  /**
+   * NEW: General-purpose method to save any data (string, JSON, etc.) to S3
+   * using presigned URL logic
+   */
+  async saveToS3(bucket, key, data, contentType) {
+    try {
+      // Create a presigned URL for the upload
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: contentType
+      });
+
+      const signedUrl = await getSignedUrl(this.client, command, { expiresIn: 3600 });
+
+      // Upload using fetch
+      const response = await fetch(signedUrl, {
+        method: 'PUT',
+        body: data,
+        headers: {
+          'Content-Type': contentType
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      console.log(`Saved to S3: ${bucket}/${key}`);
+      return true;
+    } catch (error) {
+      console.error('Error saving to S3:', error);
       throw error;
     }
   }
