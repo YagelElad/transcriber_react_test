@@ -54,7 +54,7 @@ const TextDisplay = ({ text, sessionId }) => {
         : `ai-summaries/${sessionId}.json`;
 
       const command = new GetObjectCommand({
-        Bucket: "ai.hadassah.frankfurt",
+        Bucket: "ai.hadassah.frankfurt.test",
         Key: key
       });
 
