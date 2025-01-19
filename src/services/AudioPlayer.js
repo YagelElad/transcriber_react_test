@@ -39,7 +39,7 @@ const AudioPlayer = ({ sessionId, recordingType }) => {
         const key = `${prefix}/${sessionId}${recordingType === 'recording' ? '.wav' : ''}`;
 
         const command = new GetObjectCommand({
-          Bucket: "ai.hadassah.frankfurt",
+          Bucket: "ai.hadassah.frankfurt.test",
           Key: key
         });
 
