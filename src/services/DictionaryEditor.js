@@ -66,7 +66,7 @@ const DictionaryEditor = () => {
   setIsLoading(true);
   try {
     const response = await docClient.send(new ScanCommand({
-      TableName: "transcriber-medical",
+      TableName: "transcriber-medical-test",
       Select: "ALL_ATTRIBUTES"
     }));
 
@@ -91,7 +91,7 @@ const DictionaryEditor = () => {
     try {
       await Promise.all(entries.map(entry =>
         docClient.send(new PutCommand({
-          TableName: "transcriber-medical",
+          TableName: "transcriber-medical-test",
           Item: entry
         }))
       ));
@@ -109,7 +109,7 @@ const DictionaryEditor = () => {
     console.log('Deleting entry:', entry);
 
     await docClient.send(new DeleteCommand({
-      TableName: "transcriber-medical",
+      TableName: "transcriber-medical-test",
       Key: {
         Phrase: entry.Phrase,
         DisplayAs: entry.DisplayAs  // Adding composite key if needed
@@ -121,7 +121,7 @@ const DictionaryEditor = () => {
     setEntries(newEntries);
   } catch (error) {
     console.error('Delete request details:', {
-      tableName: "transcriber-medical",
+      tableName: "transcriber-medical-test",
       key: entry
     });
     console.error('Error:', error);
@@ -175,7 +175,7 @@ const DictionaryEditor = () => {
       };
 
       await docClient.send(new PutCommand({
-        TableName: "transcriber-medical",
+        TableName: "transcriber-medical-test",
         Item: item
       }));
 
