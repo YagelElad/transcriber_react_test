@@ -172,7 +172,7 @@ async function saveCleanedText(sessionId, text) {
     };
 
     const command = new PutObjectCommand({
-      Bucket: "ai.hadassah.frankfurt",
+      Bucket: "ai.hadassah.frankfurt.test",
       Key: `clean-texts/${sessionId}.json`,
       Body: JSON.stringify(data),
       ContentType: 'application/json'
@@ -202,7 +202,7 @@ async function getAiInstructions() {
 
   try {
     const command = new GetObjectCommand({
-      Bucket: "ai.hadassah.frankfurt",
+      Bucket: "ai.hadassah.frankfurt.test",
       Key: "_config/ai-instructions.txt"
     });
 
@@ -241,7 +241,7 @@ async function getTranscriptionContent(sessionId) {
     console.log('Fetching transcription for session:', sessionId);
     
     const command = new GetObjectCommand({
-      Bucket: "ai.hadassah.frankfurt",
+      Bucket: "ai.hadassah.frankfurt.test",
       Key: `transcriptions/${sessionId}.json`
     });
 
@@ -408,7 +408,7 @@ async function getCleanedText(sessionId) {
     console.log('Fetching cleaned text for session:', sessionId);
     
     const command = new GetObjectCommand({
-      Bucket: "ai.hadassah.frankfurt",
+      Bucket: "ai.hadassah.frankfurt.test",
       Key: `clean-texts/${sessionId}.json`
     });
 
@@ -559,7 +559,7 @@ export const aiAgentSummary = async (sessionId, onProgress) => {
       };
 
       await saveToS3(
-        'ai.hadassah.frankfurt',
+        'ai.hadassah.frankfurt.test',
         `ai-summaries/${sessionId}.json`,
         JSON.stringify(summaryData, null, 2),
         'application/json'
