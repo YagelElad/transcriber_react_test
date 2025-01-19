@@ -111,7 +111,7 @@ const MedicalTranscription = () => {
       };
 
       await S3Service.saveToS3(
-        'ai.hadassah.frankfurt',
+        'ai.hadassah.frankfurt.test',
         `ai-summaries/${sessionId}.json`,
         JSON.stringify(summaryData, null, 2),
         'application/json'
