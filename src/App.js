@@ -562,7 +562,7 @@ const MedicalTranscription = () => {
         <div className="flex justify-between items-center border-b-2 border-blue-300 pb-4 mb-6">
           <div className="flex items-center space-x-4">
             <img 
-              src="https://eladsoft.com/wp-content/uploads/2022/04/Elad-logo-color.png" 
+              src="https://upload.wikimedia.org/wikipedia/he/thumb/4/40/HadassahHospital2024.svg/512px-HadassahHospital2024.svg.png"
               alt="Eladsoft Logo"
               className="h-10 object-contain"
             />
