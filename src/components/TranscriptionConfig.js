@@ -28,7 +28,7 @@ const TranscriptionConfig = ({
             className="block w-full rounded-md border border-gray-300 py-2 px-3 text-right disabled:opacity-50 disabled:cursor-not-allowed"
             dir="rtl"
           >
-            {[1, 2, 3, 4, 5].map(num => (
+            {[1, 2, 3].map(num => (
               <option key={num} value={num}>
                 {num} {num === 1 ? 'דובר' : 'דוברים'}
               </option>
