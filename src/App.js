@@ -436,7 +436,7 @@ const MedicalTranscription = () => {
     } finally {
       clearInterval(queueInterval);
     }
-  }, [isRecording, language, numSpeakers]);
+  }, [isRecording, language]);
 
   const startRecording = async () => {
     console.log('Starting recording...');
