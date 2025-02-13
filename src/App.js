@@ -354,6 +354,7 @@ const startTranscription = useCallback(async (stream) => {
       ShowSpeakerLabel: true, // Enable speaker identification
       EnableSpeakerIdentification: true, // REQUIRED for multiple speaker detection
       EnablePartialResultsStabilization: true,
+      MaxSpeakerLabels: 5,  // Let AWS automatically detect up to 5 speakers
       PartialResultsStability: 'low',
       VocabularyName: 'transcriber-he-punctuation',
       AudioStream: async function* () {
