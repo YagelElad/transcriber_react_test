@@ -38,7 +38,6 @@ const MedicalTranscription = () => {
 
   const [isProcessingAI, setIsProcessingAI] = useState(false);
 
-  // const [numSpeakers, setNumSpeakers] = useState(1);
   const [language, setLanguage] = useState('he-IL');
 
   // -- New state to hold + edit the generated summary text --
@@ -111,7 +110,7 @@ const MedicalTranscription = () => {
       };
 
       await S3Service.saveToS3(
-        'ai.hadassah.frankfurt.test',
+        'ai.hadassah.frankfurt',
         `ai-summaries/${sessionId}.json`,
         JSON.stringify(summaryData, null, 2),
         'application/json'
@@ -298,123 +297,146 @@ const MedicalTranscription = () => {
     }
   }, []);
 
-const startTranscription = useCallback(async (stream) => {
-  let isStreaming = true;
-  const audioQueue = [];
-  let queueInterval;
-
-  try {
-    const source = audioContextRef.current.createMediaStreamSource(stream);
-    workletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
-
-    source.connect(workletNodeRef.current);
-
-    workletNodeRef.current.port.onmessage = (event) => {
-      if (event.data.audioData) {
-        const audioData = event.data.audioData;
-        const stats = event.data.stats;
-
-        const buffer = Buffer.allocUnsafe(audioData.length * 2);
-        for (let i = 0; i < audioData.length; i++) {
-          buffer.writeInt16LE(audioData[i], i * 2);
-        }
-
-        if (stats.activeFrames > 0) {
-          audioQueue.push(buffer);
-        }
-
-        setAudioLevel(Math.min(100, event.data.rms * 200));
-      }
-    };
-
-    const audioStream = new ReadableStream({
-      start(controller) {
-        queueInterval = setInterval(() => {
-          if (!isStreaming) {
-            controller.close();
-            return;
-          }
-
-          if (audioQueue.length > 0) {
-            const chunk = audioQueue.shift();
-            controller.enqueue(chunk);
-          }
-        }, 5);
-      },
-      cancel() {
-        isStreaming = false;
-        clearInterval(queueInterval);
-      }
-    });
-
-const command = new StartStreamTranscriptionCommand({
-  LanguageCode: language,
-  MediaEncoding: 'pcm',
-  MediaSampleRateHertz: 16000,
-  ShowSpeakerLabel: true,  // Ensure AWS assigns speaker labels
-  EnableSpeakerIdentification: true,  // REQUIRED for speaker diarization
-  MaxSpeakerLabels: 5,  // Let AWS dynamically detect up to 5 speakers
-  EnablePartialResultsStabilization: true,
-  PartialResultsStability: 'low',
-  VocabularyName: 'transcriber-he-punctuation',
-  AudioStream: async function* () {
-    const reader = audioStream.getReader();
+  const startTranscription = useCallback(async (stream) => {
+    let isStreaming = true;
+    const audioQueue = [];
+    let accumulatedBytes = 0;
+    let queueInterval;
+  
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          yield { AudioEvent: { AudioChunk: value } };
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      workletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
+  
+      source.connect(workletNodeRef.current);
+  
+      workletNodeRef.current.port.onmessage = (event) => {
+        if (event.data.audioData) {
+          const audioData = event.data.audioData;
+          const stats = event.data.stats;
+  
+          const buffer = Buffer.allocUnsafe(audioData.length * 2);
+          for (let i = 0; i < audioData.length; i++) {
+            buffer.writeInt16LE(audioData[i], i * 2);
+          }
+  
+          if (stats.activeFrames > 0) {
+            audioQueue.push(buffer);
+          }
+  
+          setAudioLevel(Math.min(100, event.data.rms * 200));
+        }
+      };
+  
+      const audioStream = new ReadableStream({
+        start(controller) {
+          queueInterval = setInterval(() => {
+            if (!isStreaming) {
+              controller.close();
+              return;
+            }
+  
+            if (audioQueue.length > 0) {
+              const chunk = audioQueue.shift();
+              controller.enqueue(chunk);
+              accumulatedBytes += chunk.length;
+            }
+          }, 5); // Reduced interval for faster processing
+        },
+        cancel() {
+          isStreaming = false;
+          clearInterval(queueInterval);
+        }
+      });
+  
+      const command = new StartStreamTranscriptionCommand({
+        LanguageCode: language,
+        MediaEncoding: 'pcm',
+        MediaSampleRateHertz: 16000,
+        // Always enable speaker identification with a default maximum of 5 speakers.
+        EnableSpeakerIdentification: true,
+        NumberOfParticipants: 5, 
+        ShowSpeakerLabel: true,
+        EnablePartialResultsStabilization: true,
+        PartialResultsStability: 'low',
+        VocabularyName: 'transcriber-he-punctuation',
+        AudioStream: async function* () {
+          const reader = audioStream.getReader();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) {
+                yield { AudioEvent: { AudioChunk: value } };
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }()
+      });
+  
+      const response = await transcribeClient.send(command);
+  
+      // Initialize state with more efficient handling
+      let currentTranscript = '';
+      let lastPartialTimestamp = Date.now();
+      completeTranscriptsRef.current = [];
+      
+      for await (const event of response.TranscriptResultStream) {
+        if (event.TranscriptEvent?.Transcript?.Results?.[0]) {
+          const result = event.TranscriptEvent.Transcript.Results[0];
+          
+          if (result.Alternatives?.[0]) {
+            const alternative = result.Alternatives[0];
+            const newText = alternative.Transcript || '';
+            
+            // Handle speaker labels
+            let speakerLabel = '';
+            if (alternative.Items?.length > 0) {
+              const speakerItem = alternative.Items.find(item => item.Speaker);
+              if (speakerItem) {
+                speakerLabel = `[דובר ${speakerItem.Speaker}]: `;
+              }
+            } else if (result.Speaker) {
+              speakerLabel = `[דובר ${result.Speaker}]: `;
+            }
+  
+            // Update partial results more frequently
+            const now = Date.now();
+            const shouldUpdatePartial = now - lastPartialTimestamp > 100; // Update every 100ms
+  
+            if (result.IsPartial) {
+              if (shouldUpdatePartial) {
+                currentTranscript = newText;
+                lastPartialTimestamp = now;
+                
+                // Immediately update UI with partial result
+                const displayText = [
+                  ...completeTranscriptsRef.current,
+                  speakerLabel + currentTranscript
+                ].filter(Boolean).join('\n');
+                
+                setTranscription(displayText);
+              }
+            } else {
+              // For final results
+              completeTranscriptsRef.current.push(speakerLabel + newText);
+              currentTranscript = ''; // Reset current transcript
+              
+              // Always update UI immediately for final results
+              const displayText = completeTranscriptsRef.current.join('\n');
+              setTranscription(displayText);
+            }
+          }
         }
       }
+    } catch (error) {
+      console.error('Transcription error:', error);
+      throw error;
     } finally {
-      reader.releaseLock();
+      clearInterval(queueInterval);
     }
-  }()
-});
-
-const response = await transcribeClient.send(command);
-
-let currentTranscript = '';
-let lastPartialTimestamp = Date.now();
-completeTranscriptsRef.current = [];
-
-for await (const event of response.TranscriptResultStream) {
-  if (event.TranscriptEvent?.Transcript?.Results?.[0]) {
-    const result = event.TranscriptEvent.Transcript.Results[0];
-
-    if (result.Alternatives?.[0]) {
-      const alternative = result.Alternatives[0];
-      const newText = alternative.Transcript || '';
-
-      // ✅ Extract speaker label from Items
-      let speakerLabel = '';
-      if (alternative.Items?.length > 0) {
-        const speakerItem = alternative.Items.find(item => item.Speaker);
-        if (speakerItem) {
-          speakerLabel = `[דובר ${speakerItem.Speaker}]: `;
-        }
-      }
-
-      const now = Date.now();
-      const shouldUpdatePartial = now - lastPartialTimestamp > 100;
-
-      if (result.IsPartial) {
-        if (shouldUpdatePartial) {
-          currentTranscript = speakerLabel + newText;
-          lastPartialTimestamp = now;
-
-          setTranscription([...completeTranscriptsRef.current, currentTranscript].join('\n'));
-        }
-      } else {
-        completeTranscriptsRef.current.push(speakerLabel + newText);
-        currentTranscript = '';
-
-        setTranscription(completeTranscriptsRef.current.join('\n'));
-      }
-    }
-  }
-}
+  }, [isRecording, language, numSpeakers]);
 
   const startRecording = async () => {
     console.log('Starting recording...');
@@ -538,7 +560,7 @@ for await (const event of response.TranscriptResultStream) {
         <div className="flex justify-between items-center border-b-2 border-blue-300 pb-4 mb-6">
           <div className="flex items-center space-x-4">
             <img 
-              src="https://upload.wikimedia.org/wikipedia/he/thumb/4/40/HadassahHospital2024.svg/512px-HadassahHospital2024.svg.png"
+              src="https://upload.wikimedia.org/wikipedia/he/thumb/4/40/HadassahHospital2024.svg/512px-HadassahHospital2024.svg.png" 
               alt="Eladsoft Logo"
               className="h-10 object-contain"
             />
@@ -555,8 +577,6 @@ for await (const event of response.TranscriptResultStream) {
         )}
 
         <TranscriptionConfig
-          // numSpeakers={numSpeakers}
-          // setNumSpeakers={setNumSpeakers}
           language={language}
           setLanguage={setLanguage}
           disabled={isRecording || isProcessing || uploadingFile}
