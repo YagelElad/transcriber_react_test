@@ -347,84 +347,74 @@ const startTranscription = useCallback(async (stream) => {
       }
     });
 
-    const command = new StartStreamTranscriptionCommand({
-      LanguageCode: language,
-      MediaEncoding: 'pcm',
-      MediaSampleRateHertz: 16000,
-      ShowSpeakerLabel: true, // Enable speaker identification
-      EnableSpeakerIdentification: true, // REQUIRED for multiple speaker detection
-      EnablePartialResultsStabilization: true,
-      NumberOfParticipants: 5,  // Let AWS automatically detect up to 5 speakers
-      PartialResultsStability: 'low',
-      VocabularyName: 'transcriber-he-punctuation',
-      AudioStream: async function* () {
-        const reader = audioStream.getReader();
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) {
-              yield { AudioEvent: { AudioChunk: value } };
-            }
-          }
-        } finally {
-          reader.releaseLock();
-        }
-      }()
-    });
-
-    const response = await transcribeClient.send(command);
-
-    let currentTranscript = '';
-    let lastPartialTimestamp = Date.now();
-    completeTranscriptsRef.current = [];
-
-    for await (const event of response.TranscriptResultStream) {
-      if (event.TranscriptEvent?.Transcript?.Results?.[0]) {
-        const result = event.TranscriptEvent.Transcript.Results[0];
-
-        if (result.Alternatives?.[0]) {
-          const alternative = result.Alternatives[0];
-          const newText = alternative.Transcript || '';
-
-          // Handle speaker labels
-          let speakerLabel = '';
-          if (result.Speaker) {
-            speakerLabel = `[דובר ${result.Speaker}]: `;
-          }
-
-          const now = Date.now();
-          const shouldUpdatePartial = now - lastPartialTimestamp > 100;
-
-          if (result.IsPartial) {
-            if (shouldUpdatePartial) {
-              currentTranscript = newText;
-              lastPartialTimestamp = now;
-
-              const displayText = [
-                ...completeTranscriptsRef.current,
-                speakerLabel + currentTranscript
-              ].filter(Boolean).join('\n');
-
-              setTranscription(displayText);
-            }
-          } else {
-            completeTranscriptsRef.current.push(speakerLabel + newText);
-            currentTranscript = '';
-
-            const displayText = completeTranscriptsRef.current.join('\n');
-            setTranscription(displayText);
-          }
+const command = new StartStreamTranscriptionCommand({
+  LanguageCode: language,
+  MediaEncoding: 'pcm',
+  MediaSampleRateHertz: 16000,
+  ShowSpeakerLabel: true,  // Ensure AWS assigns speaker labels
+  EnableSpeakerIdentification: true,  // REQUIRED for speaker diarization
+  MaxSpeakerLabels: 5,  // Let AWS dynamically detect up to 5 speakers
+  EnablePartialResultsStabilization: true,
+  PartialResultsStability: 'low',
+  VocabularyName: 'transcriber-he-punctuation',
+  AudioStream: async function* () {
+    const reader = audioStream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          yield { AudioEvent: { AudioChunk: value } };
         }
       }
+    } finally {
+      reader.releaseLock();
     }
-  } catch (error) {
-    console.error('Transcription error:', error);
-    throw error;
-  } finally {
-    clearInterval(queueInterval);
+  }()
+});
+
+const response = await transcribeClient.send(command);
+
+let currentTranscript = '';
+let lastPartialTimestamp = Date.now();
+completeTranscriptsRef.current = [];
+
+for await (const event of response.TranscriptResultStream) {
+  if (event.TranscriptEvent?.Transcript?.Results?.[0]) {
+    const result = event.TranscriptEvent.Transcript.Results[0];
+
+    if (result.Alternatives?.[0]) {
+      const alternative = result.Alternatives[0];
+      const newText = alternative.Transcript || '';
+
+      // ✅ Extract speaker label from Items
+      let speakerLabel = '';
+      if (alternative.Items?.length > 0) {
+        const speakerItem = alternative.Items.find(item => item.Speaker);
+        if (speakerItem) {
+          speakerLabel = `[דובר ${speakerItem.Speaker}]: `;
+        }
+      }
+
+      const now = Date.now();
+      const shouldUpdatePartial = now - lastPartialTimestamp > 100;
+
+      if (result.IsPartial) {
+        if (shouldUpdatePartial) {
+          currentTranscript = speakerLabel + newText;
+          lastPartialTimestamp = now;
+
+          setTranscription([...completeTranscriptsRef.current, currentTranscript].join('\n'));
+        }
+      } else {
+        completeTranscriptsRef.current.push(speakerLabel + newText);
+        currentTranscript = '';
+
+        setTranscription(completeTranscriptsRef.current.join('\n'));
+      }
+    }
   }
-}, [isRecording, language]);
+}
 
   const startRecording = async () => {
     console.log('Starting recording...');
