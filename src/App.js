@@ -352,6 +352,7 @@ const startTranscription = useCallback(async (stream) => {
       MediaEncoding: 'pcm',
       MediaSampleRateHertz: 16000,
       ShowSpeakerLabel: true, // Enable speaker identification
+      EnableSpeakerIdentification: true, // REQUIRED for multiple speaker detection
       EnablePartialResultsStabilization: true,
       PartialResultsStability: 'low',
       VocabularyName: 'transcriber-he-punctuation',
