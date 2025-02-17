@@ -395,10 +395,10 @@ const MedicalTranscription = () => {
             if (alternative.Items?.length > 0) {
               const speakerItem = alternative.Items.find(item => item.Speaker);
               if (speakerItem) {
-                speakerLabel = `[דובר ${Number(speakerItem.Speaker) + 1}]: `;
+                speakerLabel = `[דובר ${Math.min(Number(speakerItem.Speaker) + 1, 2)}]: `;
               }
             } else if (result.Speaker) {
-              speakerLabel = `[דובר ${Number(result.Speaker) + 1}]: `;
+              speakerLabel = `[דובר ${Math.min(Number(result.Speaker) + 1, 2)}]: `;
             }
   
             // Update partial results more frequently
