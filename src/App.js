@@ -453,8 +453,8 @@ const MedicalTranscription = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: false,
+          noiseSuppression: true,
+          autoGainControl: true,
           channelCount: 1,
           sampleRate: 16000
         }
