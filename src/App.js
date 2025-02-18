@@ -352,9 +352,6 @@ const MedicalTranscription = () => {
         LanguageCode: language,
         MediaEncoding: 'pcm',
         MediaSampleRateHertz: 16000,
-        // Always enable speaker identification with a default maximum of 5 speakers.
-        EnableSpeakerIdentification: true,
-        NumberOfParticipants: 2, 
         ShowSpeakerLabel: true,
         EnablePartialResultsStabilization: true,
         PartialResultsStability: 'low',
@@ -456,8 +453,8 @@ const MedicalTranscription = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          noiseSuppression: false,
+          autoGainControl: false,
           channelCount: 1,
           sampleRate: 16000
         }
