@@ -457,7 +457,7 @@ const MedicalTranscription = () => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          channelCount: 2,
+          channelCount: 1,
           sampleRate: 16000
         }
       });
