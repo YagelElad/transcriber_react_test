@@ -352,6 +352,8 @@ const MedicalTranscription = () => {
         LanguageCode: language,
         MediaEncoding: 'pcm',
         MediaSampleRateHertz: 16000,
+        EnableChannelIdentification: true,
+        NumberOfChannels: 2,
         ShowSpeakerLabel: true,
         EnablePartialResultsStabilization: true,
         PartialResultsStability: 'low',
@@ -455,7 +457,7 @@ const MedicalTranscription = () => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          channelCount: 1,
+          channelCount: 2,
           sampleRate: 16000
         }
       });
