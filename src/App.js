@@ -565,7 +565,7 @@ const MedicalTranscription = () => {
             />
           </div>
           <h1 className="text-2xl md:text-3xl text-blue-800 text-right">
-            👨‍⚕️ מערכת תמלול חכמה
+            👨‍⚕מערכת תמלול חכמה - סביבת טסטים
           </h1>
         </div>
 
